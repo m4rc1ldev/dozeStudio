@@ -40,8 +40,8 @@ function App() {
   // Track last drawn POSITION (index into FRAME_LIST)
   const lastDrawnIndexRef = useRef(null)
   const [progress, setProgress] = useState(0)
-  const [ready, setReady] = useState(false)
   const [showLoader, setShowLoader] = useState(true)
+  const [allLoaded, setAllLoaded] = useState(false)
 
   // Loader UI refs
   const overlayRef = useRef(null)
@@ -185,31 +185,16 @@ function App() {
     const container = containerRef.current
     if (!canvas || !container) return
 
-    // Init Lenis smooth scroll and sync with GSAP
-    const lenis = new Lenis({
-      duration: 0.95,
-      smoothWheel: true,
-      smoothTouch: false,
-      wheelMultiplier: 0.85,
-      touchMultiplier: 1.1,
-    })
-    function raf(time) {
-      // gsap.ticker passes seconds; Lenis expects ms
-      lenis.raf(time * 1000)
-    }
-    gsap.ticker.add(raf)
-    lenis.on('scroll', ScrollTrigger.update)
+  // Smooth scroll + timelines will be initialized after all frames load
 
     // Initial size
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
 
-    // Preload frames with limited concurrency and early ready threshold
-    const INITIAL_READY_COUNT = 60
+  // Preload frames with limited concurrency; wait for 100% before starting site
     const CONCURRENCY = 8
     let loaded = 0
     const totalToTrack = TOTAL_FRAMES
-    const readyRef = { current: false }
 
     // Preload first frame (first available in list) immediately
     const first = new Image()
@@ -220,8 +205,9 @@ function App() {
     first.onload = () => {
       const ctx = canvas.getContext('2d')
       drawByMode(ctx, first, canvas)
-      loaded = 1
-      setProgress(Math.round((loaded / totalToTrack) * 100))
+  loaded = 1
+  setProgress(Math.round((loaded / totalToTrack) * 100))
+  if (loaded >= totalToTrack) setAllLoaded(true)
     }
 
     const loadOne = (frameNum, cb) => {
@@ -231,10 +217,7 @@ function App() {
       const done = () => {
         loaded += 1
         setProgress(Math.round((loaded / totalToTrack) * 100))
-        if (!readyRef.current && loaded >= INITIAL_READY_COUNT) {
-          readyRef.current = true
-          setReady(true)
-        }
+        if (loaded >= totalToTrack) setAllLoaded(true)
         cb && cb()
       }
       img.onload = done
@@ -284,40 +267,101 @@ function App() {
       })
     }
 
+    return () => {
+      window.removeEventListener('resize', resizeCanvas)
+      imagesRef.current = []
+    }
+  }, [])
+
+  // Switch header color when projects (white) section is in view
+  useEffect(() => {
+    const el = projectsRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      ([entry]) => setHeaderDark(entry.isIntersecting),
+      { root: null, threshold: 0.2 },
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+
+  // Fade out loader only when ALL frames are loaded (100%)
+  useEffect(() => {
+    if (progress < 100 || !overlayRef.current) return
+    gsap.to(overlayRef.current, {
+      autoAlpha: 0,
+      duration: 0.4,
+      ease: 'power2.inOut',
+      onComplete: () => setShowLoader(false),
+    })
+  }, [progress])
+
+  // Loader entrance
+  useEffect(() => {
+    if (!showLoader || !overlayRef.current) return
+    gsap.fromTo(overlayRef.current, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3, ease: 'power2.out' })
+  }, [showLoader])
+
+  // Disable scrolling while loader is visible to avoid jank before start
+  useEffect(() => {
+    if (showLoader) {
+      const prev = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => {
+        document.body.style.overflow = prev
+      }
+    }
+    document.body.style.overflow = ''
+  }, [showLoader])
+
+  // After all frames load, initialize Lenis + ScrollTrigger and timelines
+  useEffect(() => {
+    if (!allLoaded) return
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    if (!canvas || !container) return
+
+    // Init Lenis smooth scroll and sync with GSAP
+    const lenis = new Lenis({
+      duration: 0.95,
+      smoothWheel: true,
+      smoothTouch: false,
+      wheelMultiplier: 0.85,
+      touchMultiplier: 1.1,
+    })
+    function raf(time) {
+      lenis.raf(time * 1000)
+    }
+    gsap.ticker.add(raf)
+    lenis.on('scroll', ScrollTrigger.update)
+
+    // Ensure panel hidden off bottom initially
+    if (panelRef.current) gsap.set(panelRef.current, { yPercent: 100, autoAlpha: 0 })
+
     // Helpers to avoid stacked overlays on fast scroll jumps
     const killTweensAndHideAll = () => {
-      // kill any in-flight tweens
       textRefs.current?.forEach((el) => el && gsap.killTweensOf(el))
       postTextRefs.current?.forEach((el) => el && gsap.killTweensOf(el))
       if (panelRef.current) gsap.killTweensOf(panelRef.current)
-
-      // hide all
       textRefs.current?.forEach((el) => el && gsap.set(el, { autoAlpha: 0, scale: 1 }))
       postTextRefs.current?.forEach((el) => el && gsap.set(el, { autoAlpha: 0, scale: 1 }))
       if (panelRef.current) gsap.set(panelRef.current, { yPercent: 100, autoAlpha: 0 })
     }
-
-  const showSegment = (seg) => {
-      // seg 0 => hide everything
+    const showSegment = (seg) => {
       if (seg <= 0) {
         killTweensAndHideAll()
         return
       }
-      // ensure clean state before showing current
       killTweensAndHideAll()
-
-      // pre texts (1..7)
       if (seg >= 1 && seg <= 7) {
         const el = textRefs.current?.[seg - 1]
         if (el) gsap.fromTo(el, { autoAlpha: 0, scale: 0.985 }, { autoAlpha: 1, scale: 1, duration: 0.3, ease: 'power1.out' })
         return
       }
-      // panel (8)
       if (seg === 8) {
         if (panelRef.current) gsap.to(panelRef.current, { yPercent: 0, autoAlpha: 1, duration: 0.45, ease: 'power2.out' })
         return
       }
-      // post texts (9..12) - clamp to available items
       if (seg >= 9 && seg <= 12) {
         const count = postTextRefs.current?.length || 0
         if (count > 0) {
@@ -344,8 +388,7 @@ function App() {
         drawByMode(ctx, img, canvas)
         lastDrawnIndexRef.current = pos
 
-        // Segment-based control (each 50 positions). 0 hides all.
-        const seg = Math.floor(pos / FRAMES_PER_SEGMENT) // 0 none, 1..7 pre texts, 8 panel, 9..12 post texts
+        const seg = Math.floor(pos / FRAMES_PER_SEGMENT)
         if (seg !== prevSegmentRef.current) {
           showSegment(seg)
           prevSegmentRef.current = seg
@@ -354,16 +397,11 @@ function App() {
       scrollTrigger: {
         trigger: container,
         start: 'top top',
-        end: '+=3200%', // longer distance -> slower frame scrub
+        end: '+=3200%',
         scrub: 0.2,
-        pin: false, // canvas is sticky via CSS
+        pin: false,
       },
     })
-
-    // Initialize panel hidden off bottom
-    if (panelRef.current) {
-      gsap.set(panelRef.current, { yPercent: 100, autoAlpha: 0 })
-    }
 
     // Fade out center nav and bottom-left text after a small scroll
     const stBottom = gsap.to(bottomLeftRef.current, {
@@ -379,49 +417,12 @@ function App() {
     })
 
     return () => {
-  gsap.ticker.remove(raf)
-  lenis.destroy()
-      window.removeEventListener('resize', resizeCanvas)
-  stBottom.scrollTrigger?.kill(); stBottom.kill()
-  tl.scrollTrigger?.kill(); tl.kill()
-      imagesRef.current = []
+      gsap.ticker.remove(raf)
+      lenis.destroy()
+      stBottom.scrollTrigger?.kill(); stBottom.kill()
+      tl.scrollTrigger?.kill(); tl.kill()
     }
-  }, [])
-
-  // Switch header color when projects (white) section is in view
-  useEffect(() => {
-    const el = projectsRef.current
-    if (!el) return
-    const io = new IntersectionObserver(
-      ([entry]) => setHeaderDark(entry.isIntersecting),
-      { root: null, threshold: 0.2 },
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [])
-
-  // Fade out loader when progress completes
-  useEffect(() => {
-    if (progress < 100 || !overlayRef.current) return
-    gsap.to(overlayRef.current, {
-      autoAlpha: 0,
-      duration: 0.4,
-      ease: 'power2.inOut',
-      onComplete: () => setShowLoader(false),
-    })
-  }, [progress])
-
-  // Loader entrance
-  useEffect(() => {
-    if (!showLoader || !overlayRef.current) return
-    gsap.fromTo(overlayRef.current, { autoAlpha: 0 }, { autoAlpha: 1, duration: 0.3, ease: 'power2.out' })
-  }, [showLoader])
-
-  // Keep legacy ready-based fade as a fallback
-  useEffect(() => {
-    if (!ready || !overlayRef.current) return
-    gsap.to(overlayRef.current, { autoAlpha: 0, duration: 0.4, ease: 'power2.inOut', onComplete: () => setShowLoader(false) })
-  }, [ready])
+  }, [allLoaded])
 
   return (
     <div className="w-full bg-zinc-900 text-white">
