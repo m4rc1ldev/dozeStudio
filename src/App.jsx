@@ -45,10 +45,10 @@ function App() {
 
   // Loader UI refs
   const overlayRef = useRef(null)
-  const barRef = useRef(null)
-  const numberRef = useRef(null)
-  const dotsWrapRef = useRef(null)
-  const progressObj = useRef({ val: 0 })
+  const _barRef = useRef(null)
+  const _numberRef = useRef(null)
+  const _dotsWrapRef = useRef(null)
+  const _progressObj = useRef({ val: 0 })
 
   // UI overlay refs
   const bottomLeftRef = useRef(null)
@@ -58,7 +58,7 @@ function App() {
   const prevSegmentRef = useRef(0)
   const projectsRef = useRef(null)
   const [headerDark, setHeaderDark] = useState(false)
-  const [hoverKey, setHoverKey] = useState(null)
+  const [_hoverKey, _setHoverKey] = useState(null)
 
   // Clock
   const [clock, setClock] = useState('')
@@ -284,6 +284,51 @@ function App() {
       })
     }
 
+    // Helpers to avoid stacked overlays on fast scroll jumps
+    const killTweensAndHideAll = () => {
+      // kill any in-flight tweens
+      textRefs.current?.forEach((el) => el && gsap.killTweensOf(el))
+      postTextRefs.current?.forEach((el) => el && gsap.killTweensOf(el))
+      if (panelRef.current) gsap.killTweensOf(panelRef.current)
+
+      // hide all
+      textRefs.current?.forEach((el) => el && gsap.set(el, { autoAlpha: 0, scale: 1 }))
+      postTextRefs.current?.forEach((el) => el && gsap.set(el, { autoAlpha: 0, scale: 1 }))
+      if (panelRef.current) gsap.set(panelRef.current, { yPercent: 100, autoAlpha: 0 })
+    }
+
+  const showSegment = (seg) => {
+      // seg 0 => hide everything
+      if (seg <= 0) {
+        killTweensAndHideAll()
+        return
+      }
+      // ensure clean state before showing current
+      killTweensAndHideAll()
+
+      // pre texts (1..7)
+      if (seg >= 1 && seg <= 7) {
+        const el = textRefs.current?.[seg - 1]
+        if (el) gsap.fromTo(el, { autoAlpha: 0, scale: 0.985 }, { autoAlpha: 1, scale: 1, duration: 0.3, ease: 'power1.out' })
+        return
+      }
+      // panel (8)
+      if (seg === 8) {
+        if (panelRef.current) gsap.to(panelRef.current, { yPercent: 0, autoAlpha: 1, duration: 0.45, ease: 'power2.out' })
+        return
+      }
+      // post texts (9..12) - clamp to available items
+      if (seg >= 9 && seg <= 12) {
+        const count = postTextRefs.current?.length || 0
+        if (count > 0) {
+          const idx = Math.min(seg - 9, count - 1)
+          const el = postTextRefs.current?.[idx]
+          if (el) gsap.fromTo(el, { autoAlpha: 0, scale: 0.985 }, { autoAlpha: 1, scale: 1, duration: 0.3, ease: 'power1.out' })
+        }
+        return
+      }
+    }
+
     // Scroll-driven animation
     const state = { pos: 0 }
     const tl = gsap.to(state, {
@@ -299,37 +344,10 @@ function App() {
         drawByMode(ctx, img, canvas)
         lastDrawnIndexRef.current = pos
 
-        // Segment-based text control (each 50 positions). Show 1st at pos >= 50.
+        // Segment-based control (each 50 positions). 0 hides all.
         const seg = Math.floor(pos / FRAMES_PER_SEGMENT) // 0 none, 1..7 pre texts, 8 panel, 9..12 post texts
         if (seg !== prevSegmentRef.current) {
-          const prev = prevSegmentRef.current
-          // fade out previous text
-          if (prev >= 1 && prev <= 7) {
-            const prevEl = textRefs.current[prev - 1]
-            if (prevEl) gsap.to(prevEl, { autoAlpha: 0, scale: 0.98, duration: 0.25, ease: 'power1.out' })
-          }
-          if (prev >= 9 && prev <= 12) {
-            const pEl = postTextRefs.current[prev - 9]
-            if (pEl) gsap.to(pEl, { autoAlpha: 0, scale: 0.98, duration: 0.25, ease: 'power1.out' })
-          }
-          // slide panel out if leaving seg 8
-          if (prev === 8 && panelRef.current) {
-            gsap.to(panelRef.current, { yPercent: 100, autoAlpha: 0, duration: 0.45, ease: 'power2.inOut' })
-          }
-          // fade in new text
-          if (seg >= 1 && seg <= 7) {
-            const nextEl = textRefs.current[seg - 1]
-            if (nextEl) gsap.fromTo(nextEl, { autoAlpha: 0, scale: 0.98 }, { autoAlpha: 1, scale: 1, duration: 0.35, ease: 'power1.out' })
-          }
-          // slide in panel on seg 8
-          if (seg === 8 && panelRef.current) {
-            gsap.to(panelRef.current, { yPercent: 0, autoAlpha: 1, duration: 0.55, ease: 'power2.out' })
-          }
-          // fade in post texts on seg 9..12
-          if (seg >= 9 && seg <= 12) {
-            const el = postTextRefs.current[seg - 9]
-            if (el) gsap.fromTo(el, { autoAlpha: 0, scale: 0.98 }, { autoAlpha: 1, scale: 1, duration: 0.35, ease: 'power1.out' })
-          }
+          showSegment(seg)
           prevSegmentRef.current = seg
         }
       },
@@ -458,7 +476,7 @@ function App() {
               {/* 8th sliding panel */}
               <div
                 ref={panelRef}
-                className="pointer-events-auto panel absolute right-0 top-0 z-[30] h-screen w-full sm:block hidden sm:w-2/3 lg:w-1/2 xl:w-2/5 bg-white text-black p-6 sm:p-8 lg:p-10 shadow-2xl overflow-y-auto flex flex-col"
+                className="pointer-events-auto panel absolute right-0 top-0 z-[30] h-screen w-full hidden sm:flex sm:w-2/3 lg:w-1/2 xl:w-2/5 bg-white text-black p-6 sm:p-8 lg:p-10 shadow-2xl overflow-y-auto flex-col"
               >
                 <h3 className="panelelem text-base sm:text-lg md:text-xl font-[100]">© 2024 Doze.Std</h3>
                 <p className="panelelem mt-6 sm:mt-8 lg:mt-10 text-base sm:text-lg md:text-xl">
