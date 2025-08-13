@@ -336,7 +336,7 @@ function App() {
     lenis.on('scroll', ScrollTrigger.update)
 
     // Ensure panel hidden off bottom initially
-    if (panelRef.current) gsap.set(panelRef.current, { yPercent: 100, autoAlpha: 0 })
+      if (panelRef.current) gsap.set(panelRef.current, { yPercent: 100, autoAlpha: 0, pointerEvents: 'none' })
 
     // Helpers to avoid stacked overlays on fast scroll jumps
     const killTweensAndHideAll = () => {
@@ -345,7 +345,7 @@ function App() {
       if (panelRef.current) gsap.killTweensOf(panelRef.current)
       textRefs.current?.forEach((el) => el && gsap.set(el, { autoAlpha: 0, scale: 1 }))
       postTextRefs.current?.forEach((el) => el && gsap.set(el, { autoAlpha: 0, scale: 1 }))
-      if (panelRef.current) gsap.set(panelRef.current, { yPercent: 100, autoAlpha: 0 })
+        if (panelRef.current) gsap.set(panelRef.current, { yPercent: 100, autoAlpha: 0, pointerEvents: 'none' })
     }
     const showSegment = (seg) => {
       if (seg <= 0) {
@@ -359,7 +359,7 @@ function App() {
         return
       }
       if (seg === 8) {
-        if (panelRef.current) gsap.to(panelRef.current, { yPercent: 0, autoAlpha: 1, duration: 0.45, ease: 'power2.out' })
+    if (panelRef.current) gsap.to(panelRef.current, { yPercent: 0, autoAlpha: 1, duration: 0.45, ease: 'power2.out', onStart: () => gsap.set(panelRef.current, { pointerEvents: 'auto' }) })
         return
       }
       if (seg >= 9 && seg <= 12) {
@@ -477,7 +477,7 @@ function App() {
               {/* 8th sliding panel */}
               <div
                 ref={panelRef}
-                className="pointer-events-auto panel absolute right-0 top-0 z-[30] h-screen w-full hidden sm:flex sm:w-2/3 lg:w-1/2 xl:w-2/5 bg-white text-black p-6 sm:p-8 lg:p-10 shadow-2xl overflow-y-auto flex-col"
+                className="panel absolute right-0 top-0 z-[30] h-screen w-full hidden sm:flex sm:w-2/3 lg:w-1/2 xl:w-2/5 bg-white text-black p-6 sm:p-8 lg:p-10 shadow-2xl overflow-y-auto flex-col opacity-0 translate-y-full pointer-events-none"
               >
                 <h3 className="panelelem text-base sm:text-lg md:text-xl font-[100]">© 2024 Doze.Std</h3>
                 <p className="panelelem mt-6 sm:mt-8 lg:mt-10 text-base sm:text-lg md:text-xl">
