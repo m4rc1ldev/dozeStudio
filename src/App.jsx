@@ -335,10 +335,8 @@ function App() {
     gsap.ticker.add(raf)
     lenis.on('scroll', ScrollTrigger.update)
 
-    // Ensure panel hidden off bottom initially
-      if (panelRef.current) gsap.set(panelRef.current, { yPercent: 100, autoAlpha: 0, pointerEvents: 'none' })
-
-    // Helpers to avoid stacked overlays on fast scroll jumps
+    // Initialize panel hidden off bottom
+    if (panelRef.current) gsap.set(panelRef.current, { yPercent: 100, autoAlpha: 0, pointerEvents: 'none' })    // Helpers to avoid stacked overlays on fast scroll jumps
     const killTweensAndHideAll = () => {
       textRefs.current?.forEach((el) => el && gsap.killTweensOf(el))
       postTextRefs.current?.forEach((el) => el && gsap.killTweensOf(el))
@@ -348,18 +346,39 @@ function App() {
         if (panelRef.current) gsap.set(panelRef.current, { yPercent: 100, autoAlpha: 0, pointerEvents: 'none' })
     }
     const showSegment = (seg) => {
-      if (seg <= 0) {
-        killTweensAndHideAll()
-        return
+      // Always start by gracefully hiding all current overlays
+      const prevSeg = prevSegmentRef.current
+      
+      // Fade out previous overlay before showing new one
+      if (prevSeg >= 1 && prevSeg <= 7) {
+        const prevEl = textRefs.current?.[prevSeg - 1]
+        if (prevEl) gsap.to(prevEl, { autoAlpha: 0, scale: 0.985, duration: 0.25, ease: 'power1.out' })
       }
-      killTweensAndHideAll()
+      if (prevSeg === 8 && panelRef.current) {
+        gsap.to(panelRef.current, { yPercent: 100, autoAlpha: 0, duration: 0.4, ease: 'power2.inOut', onComplete: () => gsap.set(panelRef.current, { pointerEvents: 'none' }) })
+      }
+      if (prevSeg >= 9 && prevSeg <= 12) {
+        const count = postTextRefs.current?.length || 0
+        if (count > 0) {
+          const idx = Math.min(prevSeg - 9, count - 1)
+          const prevEl = postTextRefs.current?.[idx]
+          if (prevEl) gsap.to(prevEl, { autoAlpha: 0, scale: 0.985, duration: 0.25, ease: 'power1.out' })
+        }
+      }
+
+      // Show new segment after brief delay
+      if (seg <= 0) return
+      
       if (seg >= 1 && seg <= 7) {
         const el = textRefs.current?.[seg - 1]
-        if (el) gsap.fromTo(el, { autoAlpha: 0, scale: 0.985 }, { autoAlpha: 1, scale: 1, duration: 0.3, ease: 'power1.out' })
+        if (el) gsap.fromTo(el, { autoAlpha: 0, scale: 0.985 }, { autoAlpha: 1, scale: 1, duration: 0.35, ease: 'power1.out', delay: 0.1 })
         return
       }
-      if (seg === 8) {
-    if (panelRef.current) gsap.to(panelRef.current, { yPercent: 0, autoAlpha: 1, duration: 0.45, ease: 'power2.out', onStart: () => gsap.set(panelRef.current, { pointerEvents: 'auto' }) })
+      if (seg === 8 && panelRef.current) {
+        gsap.fromTo(panelRef.current, 
+          { yPercent: 100, autoAlpha: 0 }, 
+          { yPercent: 0, autoAlpha: 1, duration: 0.5, ease: 'power2.out', delay: 0.1, onStart: () => gsap.set(panelRef.current, { pointerEvents: 'auto' }) }
+        )
         return
       }
       if (seg >= 9 && seg <= 12) {
@@ -367,7 +386,7 @@ function App() {
         if (count > 0) {
           const idx = Math.min(seg - 9, count - 1)
           const el = postTextRefs.current?.[idx]
-          if (el) gsap.fromTo(el, { autoAlpha: 0, scale: 0.985 }, { autoAlpha: 1, scale: 1, duration: 0.3, ease: 'power1.out' })
+          if (el) gsap.fromTo(el, { autoAlpha: 0, scale: 0.985 }, { autoAlpha: 1, scale: 1, duration: 0.35, ease: 'power1.out', delay: 0.1 })
         }
         return
       }
@@ -477,7 +496,7 @@ function App() {
               {/* 8th sliding panel */}
               <div
                 ref={panelRef}
-                className="panel absolute right-0 top-0 z-[30] h-screen w-full hidden sm:flex sm:w-2/3 lg:w-1/2 xl:w-2/5 bg-white text-black p-6 sm:p-8 lg:p-10 shadow-2xl overflow-y-auto flex-col opacity-0 translate-y-full pointer-events-none"
+                className="panel absolute right-0 top-0 z-[30] h-screen w-full hidden md:flex md:w-2/3 lg:w-1/2 xl:w-2/5 bg-white text-black p-6 sm:p-8 lg:p-10 shadow-2xl overflow-y-auto flex-col opacity-0 pointer-events-none"
               >
                 <h3 className="panelelem text-base sm:text-lg md:text-xl font-[100]">© 2024 Doze.Std</h3>
                 <p className="panelelem mt-6 sm:mt-8 lg:mt-10 text-base sm:text-lg md:text-xl">
